@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta carset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>node {{.Name}}</title>
+<link rel="stylesheet" href="/css/spectre.min.css">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<header class="navbar">
+  <div class="navbar-section">
+    <a href="{{link "/"}}" class="navbar-brand mr-2">TorqueStatus</a>
+    <a href="{{link "/"}}" class="btn btn-link">node</a>
+    <a href="{{link "/job"}}" class="btn btn-link">job</a>
+  </div>
+</header>
+<div class="container mt-2">
+  <div class="columns">
+    <div class="column col-12">
+      <h1>{{.Name}}</h1>
+    </div>
+  </div>
+  <div class="columns">
+    <div class="column col-6">
+      <h2>status</h2>
+      <div class="divider"></div>
+      <table class="table table-striped condensed">
+        {{range $k, $v := .Status}}
+          <tr><td>{{$k}}</td><td class="text-break">{{$v}}</td></tr>
+        {{end}}
+      </table>
+    </div>
+    <div class="column col-6">
+      <h2>job</h2>
+      <div class="divider"></div>
+      <table class="table table-striped condensed">
+        {{range $j := .JobList}}
+          <tr><td class="text-break">{{$j}}</td></tr>
+        {{end}}
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>

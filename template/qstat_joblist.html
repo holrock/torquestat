@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta carset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Torque job list</title>
+<link rel="stylesheet" href="/css/spectre.min.css">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<header class="navbar">
+  <div class="navbar-section">
+    <a href="{{link "/"}}" class="navbar-brand mr-2">TorqueStatus</a>
+    <a href="{{link "/"}}" class="btn btn-link">node</a>
+    <a href="{{link "/job"}}" class="btn btn-link">job</a>
+  </div>
+</header>
+<div class="container mt-2">
+  <div class="columns">
+    <div class="column col-12">
+      <table class="table table-striped condensed">
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>state</th>
+            <th>name</th>
+            <th>owner</th>
+            <th>queue</th>
+            <th>node</th>
+            <th>walltime</th>
+            <th>memory</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .JobList}}
+            <tr>
+              <td><a href="{{.URL}}">{{.UnifiedID}}</a></td>
+              <td><span class="label label-{{.StateColor}}">{{.LongState}}</span></td>
+              <td>{{.Name}}</td>
+              <td>{{.Owner}}</td>
+              <td>{{.Queue}}</td>
+              <td>{{.ExecHost}}</td>
+              <td>{{.WallTime}}</td>
+              <td>{{.Mem}}</td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>

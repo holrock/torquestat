@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Torque status</title>
+<link rel="stylesheet" href="/css/spectre.min.css">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<header class="navbar">
+  <div class="navbar-section">
+    <a href="{{link "/"}}" class="navbar-brand mr-2">TorqueStatus</a>
+    <a href="{{link "/"}}" class="btn btn-link">node</a>
+    <a href="{{link "/job"}}" class="btn btn-link">job</a>
+  </div>
+</header>
+<div class="container mt-2">
+  <div class="columns">
+    <div class="column col-12">
+      <table class="table table-striped condensed">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>node</th>
+            <th>status</th>
+            <th>running job</th>
+            <th>core</th>
+            <th>physical memory</th>
+            <th>load average</th>
+            <th>property</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range $i, $n := .NodeList}}
+          <tr>
+            <td>{{add $i 1}}</td>
+            <td><a href="{{$n.URL}}">{{$n.Name}}</a></td>
+            <td><span class="label label-{{$n.StateColor}}">{{$n.State}}</span></td>
+            <td>{{$n.NumJobs}}</td>
+            <td>{{$n.NumProcs}}</td>
+            <td>{{$n.GetGiBMem "physmem" }}GiB</td>
+            <td>{{index $n.Status "loadave"}}</td>
+            <td>{{index $n.Status "properties"}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>total</td>
+            <td>{{len .NodeList}} nodes</td>
+            <td></td>
+            <td>{{.TotalJobs}} jobs</td>
+            <td>{{.AvailCores}}/{{.TotalCores}} cores</td>
+            <td>{{.TotalMem}}GiB</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>
