@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Torque status</title>
+<title>LSF status</title>
 <link rel="stylesheet" href="/css/spectre.min.css">
 <link rel="stylesheet" href="/css/site.css">
 </head>
 <body>
 <header class="navbar">
   <div class="navbar-section">
-    <a href="{{link "/"}}" class="navbar-brand mr-2">TorqueStatus</a>
+    <a href="{{link "/"}}" class="navbar-brand mr-2">LSF Status</a>
     <a href="{{link "/"}}" class="btn btn-link">node</a>
     <a href="{{link "/job"}}" class="btn btn-link">job</a>
   </div>
@@ -27,21 +27,19 @@
             <th>running job</th>
             <th>core</th>
             <th>physical memory</th>
-            <th>load average</th>
-            <th>property</th>
+            <th>CPU utilization</th>
           </tr>
         </thead>
         <tbody>
           {{range $i, $n := .NodeList}}
           <tr>
             <td>{{add $i 1}}</td>
-            <td><a href="{{$n.URL}}">{{$n.Name}}</a></td>
-            <td><span class="label label-{{$n.StateColor}}">{{$n.State}}</span></td>
-            <td>{{$n.NumJobs}}</td>
-            <td>{{$n.NumProcs}}</td>
-            <td>{{$n.GetGiBMem "physmem" }}GiB</td>
-            <td>{{index $n.Status "loadave"}}</td>
-            <td>{{index $n.Status "properties"}}</td>
+            <td>{{$n.HostName}}</td>
+            <td><span class="label">{{$n.Status}}</span></td>
+            <td>{{$n.NJobs}}</td>
+            <td>{{$n.Max}}</td>
+            <td>{{$n.Mem}}</td>
+            <td>{{$n.UT}}</td>
           </tr>
           {{end}}
         </tbody>
@@ -50,9 +48,8 @@
             <td>total</td>
             <td>{{len .NodeList}} nodes</td>
             <td></td>
-            <td>{{.TotalJobs}} jobs</td>
-            <td>{{.AvailCores}}/{{.TotalCores}} cores</td>
-            <td>{{.TotalMem}}GiB</td>
+            <td></td>
+            <td></td>
             <td></td>
             <td></td>
           </tr>

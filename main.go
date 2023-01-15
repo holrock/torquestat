@@ -8,15 +8,211 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 )
+
+type LsfJob struct {
+	JobID      string
+	Name       string
+	Owner      string
+	State      string
+	Queue      string
+	FromHost   string
+	ExecHost   string
+	SubmitTime string
+}
+
+type LsfHost struct {
+	HostName       string
+	Status         string
+	JobLimtPerUser int
+	Max            int
+	NJobs          int
+	Run            int
+	SSUSP          int
+	USUSP          int
+	RSV            int
+}
+
+type LsfLoad struct {
+	HostName string
+	Status   string
+	R15s     string
+	R1m      string
+	R15m     string
+	UT       string
+	PG       string
+	LS       string
+	IT       string
+	Tmp      string
+	Swp      string
+	Mem      string
+}
+
+type LsfNode struct {
+	HostName string
+	Status   string
+	UT       string
+	Mem      string
+	Max      int
+	NJobs    int
+}
+
+type LsfNodes struct {
+	NodeList []LsfNode
+}
+
+func atoi(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func parseLsload(s string) []LsfLoad {
+	var acc []LsfLoad
+
+	for _, line := range strings.Split(s, "\n")[1:] {
+		fs := strings.Fields(line)
+		if len(fs) != 12 {
+			continue
+		}
+
+		h := LsfLoad{
+			HostName: fs[0],
+			Status:   fs[1],
+			R15s:     fs[2],
+			R1m:      fs[3],
+			R15m:     fs[4],
+			UT:       fs[5],
+			PG:       fs[6],
+			LS:       fs[7],
+			IT:       fs[8],
+			Tmp:      fs[9],
+			Swp:      fs[10],
+			Mem:      fs[11],
+		}
+		acc = append(acc, h)
+	}
+	return acc
+}
+
+func parseBhosts(s string) []LsfHost {
+	var acc []LsfHost
+	for _, line := range strings.Split(s, "\n")[1:] {
+		fs := strings.Fields(line)
+		if len(fs) != 9 {
+			continue
+		}
+
+		h := LsfHost{
+			HostName:       fs[0],
+			Status:         fs[1],
+			JobLimtPerUser: atoi(fs[2]),
+			Max:            atoi(fs[3]),
+			NJobs:          atoi(fs[4]),
+			Run:            atoi(fs[5]),
+			SSUSP:          atoi(fs[6]),
+			USUSP:          atoi(fs[7]),
+			RSV:            atoi(fs[8]),
+		}
+		acc = append(acc, h)
+	}
+	return acc
+}
+
+func parseBjobs(s string) []LsfJob {
+	var acc []LsfJob
+	for _, line := range strings.Split(s, "\n")[1:] {
+		fs := strings.Fields(line)
+		if len(fs) != 10 {
+			continue
+		}
+		j := LsfJob{
+			JobID:      fs[0],
+			Name:       fs[1],
+			Owner:      fs[2],
+			State:      fs[3],
+			Queue:      fs[4],
+			FromHost:   fs[5],
+			ExecHost:   fs[6],
+			SubmitTime: fs[7] + fs[8] + fs[9],
+		}
+		acc = append(acc, j)
+	}
+	return acc
+}
+
+func mergeLSFNode(hosts []LsfHost, loads []LsfLoad) []LsfNode {
+	var acc []LsfNode
+	d := make(map[string]LsfLoad, len(loads))
+	for _, load := range loads {
+		d[load.HostName] = load
+	}
+	for _, host := range hosts {
+		load, ok := d[host.HostName]
+
+		if ok {
+			acc = append(acc, LsfNode{
+				HostName: host.HostName,
+				Status:   load.Status,
+				UT:       load.UT,
+				Mem:      load.Mem,
+				Max:      host.Max,
+				NJobs:    host.NJobs,
+			})
+		} else {
+			acc = append(acc, LsfNode{
+				HostName: host.HostName,
+				Max:      host.Max,
+				NJobs:    host.NJobs,
+			})
+		}
+	}
+	return acc
+}
+
+func lava() ([]LsfJob, []LsfHost, []LsfLoad) {
+	f, err := os.Open("testdata/bjobs.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	content, err := io.ReadAll(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s := string(content)
+	lsf_jobs := parseBjobs(s)
+
+	f, err = os.Open("testdata/bhosts.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	content, err = io.ReadAll(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	lsf_hosts := parseBhosts(string(content))
+
+	f, err = os.Open("testdata/lsload.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	content, err = io.ReadAll(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	lsf_loads := parseLsload(string(content))
+	return lsf_jobs, lsf_hosts, lsf_loads
+}
 
 var JobStatusMap = map[string]string{
 	"C": "completed",
@@ -99,9 +295,9 @@ func xmlToPbsNodes(content []byte) (*PbsNodes, error) {
 
 func (n *Node) parseStatus() {
 	n.Status = make(map[string]string)
-  if n.StatusStr == "" {
-    return
-  }
+	if n.StatusStr == "" {
+		return
+	}
 	for _, s := range strings.Split(n.StatusStr, ",") {
 		v := strings.Split(s, "=")
 		n.Status[v[0]] = v[1]
@@ -193,19 +389,18 @@ func (qj *QstatJobMap) UnmarshalXML(d *xml.Decoder, start xml.StartElement) erro
 		if err != nil {
 			return err
 		}
-		switch token.(type) {
+		switch t := token.(type) {
 		case xml.StartElement:
-			t := token.(xml.StartElement)
 			if t.Name.Local == "resources_used" {
 				currentMap = qj.ResourcesUsed
 			}
 			tag = t.Name.Local
 		case xml.EndElement:
-			if token.(xml.EndElement).Name.Local == "resources_used" {
+			if t.Name.Local == "resources_used" {
 				currentMap = qj.Elems
 			}
 		case xml.CharData:
-			s := string(token.(xml.CharData))
+			s := string(t)
 			if tag == "Variable_List" {
 				for _, s := range strings.Split(s, ",") {
 					v := strings.Split(s, "=")
@@ -220,19 +415,26 @@ func (qj *QstatJobMap) UnmarshalXML(d *xml.Decoder, start xml.StartElement) erro
 }
 
 func pbsnodes(pbsnodesCmd string, w http.ResponseWriter, templ *template.Template) {
-	content, err := exec.Command(pbsnodesCmd, "-x").Output()
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+	_, lsf_hosts, lsf_loads := lava()
+	lsfNodes := LsfNodes{
+		NodeList: mergeLSFNode(lsf_hosts, lsf_loads),
 	}
-	pbsnodes, err := xmlToPbsNodes(content)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+
+	/*
+		content, err := exec.Command(pbsnodesCmd, "-x").Output()
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		pbsnodes, err := xmlToPbsNodes(content)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	*/
 	b := new(bytes.Buffer)
 
-	err = templ.ExecuteTemplate(b, "pbsnodes.html", pbsnodes)
+	err := templ.ExecuteTemplate(b, "pbsnodes.html", lsfNodes)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -240,8 +442,8 @@ func pbsnodes(pbsnodesCmd string, w http.ResponseWriter, templ *template.Templat
 	io.WriteString(w, b.String())
 }
 
-var nodeParamRegex = regexp.MustCompile("\\A/node/([^/]+)")
-var nodeParamValidationRegex = regexp.MustCompile("\\A[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*\\z")
+var nodeParamRegex = regexp.MustCompile(`\A/node/([^/]+)`)
+var nodeParamValidationRegex = regexp.MustCompile(`\A[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\z`)
 
 func pbsnodesNode(pbsnodesCmd string, w http.ResponseWriter, r *http.Request, templ *template.Template) {
 	m := nodeParamRegex.FindStringSubmatch(r.URL.Path)
@@ -272,7 +474,7 @@ func pbsnodesNode(pbsnodesCmd string, w http.ResponseWriter, r *http.Request, te
 	io.WriteString(w, b.String())
 }
 
-var jobIDValidationRegex = regexp.MustCompile("\\A\\d+(?:\\[\\d*\\])?\\.[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*\\z")
+var jobIDValidationRegex = regexp.MustCompile(`\A\d+(?:\[\d*\])?\.[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\z`)
 
 func execQstat(qstatCmd string, arrayid string) ([]byte, error) {
 	if len(arrayid) == 0 {
@@ -351,12 +553,15 @@ func initTemplate() *template.Template {
 		if err != nil {
 			panic(err.Error())
 		}
-		b, err := ioutil.ReadAll(f)
+		b, err := io.ReadAll(f)
+		if err != nil {
+			log.Fatal(err)
+		}
 		name := filepath.Base(fname)
 		nt := t.New(name)
 		_, err = nt.Parse(string(b))
 		if err != nil {
-			panic(err.Error())
+			log.Fatal(err.Error())
 		}
 	}
 	return t
@@ -377,7 +582,7 @@ func startServer(port int, pbsnodesCmd string, qstatCmd string) {
 		qstatJoblist(qstatCmd, w, "", t)
 	})
 
-	var jobParamRegex = regexp.MustCompile("\\A/job/([^/]+)")
+	var jobParamRegex = regexp.MustCompile(`\A/job/([^/]+)`)
 	http.HandleFunc("/job/", func(w http.ResponseWriter, r *http.Request) {
 		m := jobParamRegex.FindStringSubmatch(r.URL.Path)
 		if len(m) == 2 {
