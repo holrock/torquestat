@@ -2,12 +2,12 @@
 
 EXE := torquestat
 SRC := main.go bindata.go
-ASSETS := $(wildcard template/*.html css/*.css)
+ASSETS := $(wildcard template/*.html css/*.css js/*.js)
 
 all: $(EXE)
 
 bindata.go: $(ASSETS)
-	go-assets-builder -o bindata.go css template
+	go-assets-builder -o bindata.go css template js
 
 $(EXE): $(SRC)
 	go build -o $(EXE) $(SRC)

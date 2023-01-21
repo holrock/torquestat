@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type LsfJob struct {
@@ -66,7 +67,12 @@ type LsfNode struct {
 }
 
 type LsfNodes struct {
-	NodeList []LsfNode
+	NodeList   []LsfNode
+	TotalCores int
+	DownCores  int
+	TotalJobs  int
+	TotalMem   int
+	LastUpdate string
 }
 
 func atoi(s string) int {
@@ -178,6 +184,22 @@ func mergeLSFNode(hosts []LsfHost, loads []LsfLoad) []LsfNode {
 		}
 	}
 	return acc
+}
+
+func (n *LsfNode) StateColor() string {
+	switch n.Status {
+	case "ok":
+		return "success"
+	case "busy":
+		return "warning"
+
+	case "unavail":
+		return "error"
+
+	default:
+		return "error"
+
+	}
 }
 
 func lava() ([]LsfJob, []LsfHost, []LsfLoad) {
@@ -419,7 +441,15 @@ func pbsnodes(pbsnodesCmd string, w http.ResponseWriter, templ *template.Templat
 	lsfNodes := LsfNodes{
 		NodeList: mergeLSFNode(lsf_hosts, lsf_loads),
 	}
-
+	nJobs := 0
+	nCPU := 0
+	for _, n := range lsfNodes.NodeList {
+		nJobs += n.NJobs
+		nCPU += n.Max
+	}
+	lsfNodes.TotalJobs = nJobs
+	lsfNodes.TotalCores = nCPU
+	lsfNodes.LastUpdate = time.Now().Format("2006-1-2 15:04:05")
 	/*
 		content, err := exec.Command(pbsnodesCmd, "-x").Output()
 		if err != nil {
@@ -597,6 +627,7 @@ func startServer(port int, pbsnodesCmd string, qstatCmd string) {
 	})
 
 	http.Handle("/css/", http.FileServer(Assets))
+	http.Handle("/js/", http.FileServer(Assets))
 
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 	if err != nil {

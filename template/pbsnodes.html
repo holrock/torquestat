@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LSF status</title>
+<title>LSF status | LastUpdate:{{.LastUpdate}}</title>
 <link rel="stylesheet" href="/css/spectre.min.css">
 <link rel="stylesheet" href="/css/site.css">
 </head>
@@ -14,6 +14,14 @@
     <a href="{{link "/"}}" class="btn btn-link">node</a>
     <a href="{{link "/job"}}" class="btn btn-link">job</a>
   </div>
+  <section class="navbar-section">
+    <div class="input-group input-inline">
+    <label class="form-switch text-secondary">
+      <input type="checkbox" name="autoreload" id="autoreaload">
+      <i class="form-icon"></i> AutoReload
+    </label>
+  </div>
+  </section>
 </header>
 <div class="container mt-2">
   <div class="columns">
@@ -35,7 +43,7 @@
           <tr>
             <td>{{add $i 1}}</td>
             <td>{{$n.HostName}}</td>
-            <td><span class="label">{{$n.Status}}</span></td>
+            <td><span class="label label-{{$n.StateColor}}">{{$n.Status}}</span></td>
             <td>{{$n.NJobs}}</td>
             <td>{{$n.Max}}</td>
             <td>{{$n.Mem}}</td>
@@ -48,8 +56,8 @@
             <td>total</td>
             <td>{{len .NodeList}} nodes</td>
             <td></td>
-            <td></td>
-            <td></td>
+            <td>{{.TotalJobs}} jobs</td>
+            <td>{{.TotalCores}} cores</td>
             <td></td>
             <td></td>
           </tr>
@@ -58,5 +66,9 @@
     </div>
   </div>
 </div>
+<footer class="container mt-2 text-right">
+  LastUpdate:{{.LastUpdate}}
+</footer>
 </body>
+<script src="js/app.js"></script>
 </html>
