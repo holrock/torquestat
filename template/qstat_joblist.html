@@ -26,22 +26,22 @@
             <th>name</th>
             <th>owner</th>
             <th>queue</th>
-            <th>node</th>
-            <th>walltime</th>
-            <th>memory</th>
+            <th>from host</th>
+            <th>exec host</th>
+            <th>submit time</th>
           </tr>
         </thead>
         <tbody>
           {{range .JobList}}
             <tr>
-              <td><a href="{{.URL}}">{{.UnifiedID}}</a></td>
+              <td>{{.JobID}}</td>
               <td><span class="label label-{{.StateColor}}">{{.LongState}}</span></td>
               <td>{{.Name}}</td>
               <td>{{.Owner}}</td>
               <td>{{.Queue}}</td>
+              <td>{{.FromHost}}</td>
               <td>{{.ExecHost}}</td>
-              <td>{{.WallTime}}</td>
-              <td>{{.Mem}}</td>
+              <td>{{.SubmitTime}}</td>
             </tr>
           {{end}}
         </tbody>
