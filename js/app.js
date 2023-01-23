@@ -18,9 +18,8 @@ document.addEventListener('DOMContentLoaded', function() {
             clearTimeout(this.tid);
             this.tid = null;
         } else {
-            this.tid = setTimeout(() => {
-                location.reload();
-              }, 1000 * this.timeout_sec);
+            const np = new URLSearchParams({"reload": "on", "timeout": 60});
+            location.href = "/?" + np;
         }
     });
 });

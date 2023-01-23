@@ -8,8 +8,9 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -145,11 +146,19 @@ func parseBhosts(s string) []LsfHost {
 
 func parseBjobs(s string) []LsfJob {
 	var acc []LsfJob
+	var r = regexp.MustCompile(`\s([^\s]+\s[^\s]+\s[^\s]+)\z`)
+
 	for _, line := range strings.Split(s, "\n")[1:] {
-		fs := strings.Fields(line)
-		if len(fs) != 10 {
+		idx := r.FindStringIndex(line)
+		if idx == nil {
 			continue
 		}
+		time := line[idx[0]+1 : idx[1]]
+		fs := strings.Fields(line[0:idx[0]])
+		if len(fs) < 6 {
+			continue
+		}
+		name := strings.Join(fs[6:], " ")
 		j := LsfJob{
 			JobID:      fs[0],
 			Owner:      fs[1],
@@ -157,8 +166,8 @@ func parseBjobs(s string) []LsfJob {
 			Queue:      fs[3],
 			FromHost:   fs[4],
 			ExecHost:   fs[5],
-			Name:       fs[6],
-			SubmitTime: fs[7] + " " + fs[8] + " " + fs[9],
+			Name:       name,
+			SubmitTime: time,
 		}
 		acc = append(acc, j)
 	}
@@ -243,40 +252,6 @@ func (j *LsfJob) StateColor() string {
 	}
 }
 
-func lava() ([]LsfJob, []LsfHost, []LsfLoad) {
-	f, err := os.Open("testdata/bjobs.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	content, err := io.ReadAll(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-	s := string(content)
-	lsf_jobs := parseBjobs(s)
-
-	f, err = os.Open("testdata/bhosts.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	content, err = io.ReadAll(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-	lsf_hosts := parseBhosts(string(content))
-
-	f, err = os.Open("testdata/lsload.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	content, err = io.ReadAll(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-	lsf_loads := parseLsload(string(content))
-	return lsf_jobs, lsf_hosts, lsf_loads
-}
-
 var JobStatusMap = map[string]string{
 	"C": "completed",
 	"E": "exiting",
@@ -287,8 +262,21 @@ var JobStatusMap = map[string]string{
 	"W": "waiting",
 }
 
-func pbsnodes(pbsnodesCmd string, w http.ResponseWriter, templ *template.Template) {
-	_, lsf_hosts, lsf_loads := lava()
+func pbsnodes(bhostsCmd string, lsloadCmd string, w http.ResponseWriter, templ *template.Template) {
+	content, err := exec.Command(bhostsCmd).Output()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	lsf_hosts := parseBhosts(string(content))
+
+	content, err = exec.Command(lsloadCmd).Output()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	lsf_loads := parseLsload(string(content))
+
 	lsfNodes := LsfNodes{
 		NodeList: mergeLSFNode(lsf_hosts, lsf_loads),
 	}
@@ -315,7 +303,7 @@ func pbsnodes(pbsnodesCmd string, w http.ResponseWriter, templ *template.Templat
 	*/
 	b := new(bytes.Buffer)
 
-	err := templ.ExecuteTemplate(b, "pbsnodes.html", lsfNodes)
+	err = templ.ExecuteTemplate(b, "pbsnodes.html", lsfNodes)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -323,16 +311,20 @@ func pbsnodes(pbsnodesCmd string, w http.ResponseWriter, templ *template.Templat
 	io.WriteString(w, b.String())
 }
 
-func qstatJoblist(qstatCmd string, w http.ResponseWriter, templ *template.Template) {
-	lsf_jobs, _, _ := lava()
-
+func qstatJoblist(bjobsCmd string, w http.ResponseWriter, templ *template.Template) {
+	content, err := exec.Command(bjobsCmd, "-u", "all", "-w").Output()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	lsf_jobs := parseBjobs(string(content))
 	b := new(bytes.Buffer)
 	joblist := struct {
 		JobList []LsfJob
 	}{
 		JobList: lsf_jobs,
 	}
-	err := templ.ExecuteTemplate(b, "qstat_joblist.html", joblist)
+	err = templ.ExecuteTemplate(b, "qstat_joblist.html", joblist)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -402,15 +394,15 @@ func initTemplate() *template.Template {
 	return t
 }
 
-func startServer(port int, pbsnodesCmd string, qstatCmd string) {
+func startServer(port int, bjobsCmd string, bhostsCmd string, lsloadCmd string) {
 	t := initTemplate()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		pbsnodes(pbsnodesCmd, w, t)
+		pbsnodes(bhostsCmd, lsloadCmd, w, t)
 	})
 
 	http.HandleFunc("/job", func(w http.ResponseWriter, r *http.Request) {
-		qstatJoblist(qstatCmd, w, t)
+		qstatJoblist(bjobsCmd, w, t)
 	})
 	/*
 		var jobParamRegex = regexp.MustCompile(`\A/job/([^/]+)`)
@@ -438,11 +430,12 @@ func startServer(port int, pbsnodesCmd string, qstatCmd string) {
 
 func main() {
 	var (
-		port        = flag.Int("port", 8111, "http port")
-		pbsnodesCmd = flag.String("pbsnodes", "/usr/bin/pbsnodes", "pbsnodes command path")
-		qstatCmd    = flag.String("qstat", "/usr/bin/qstat", "qstat command path")
+		port      = flag.Int("port", 8111, "http port")
+		bjobsCmd  = flag.String("bjobs", "/usr/share/lsf/10.1/linux2.6-glibc2.3-x86_64/bin/bjobs", "bjobs command path")
+		bhostsCmd = flag.String("bhosts", "/usr/share/lsf/10.1/linux2.6-glibc2.3-x86_64/bin/bhosts", "bhosts command path")
+		lsloadCmd = flag.String("lsload", "/usr/share/lsf/10.1/linux2.6-glibc2.3-x86_64/bin/lsload", "lsload command path")
 	)
 	flag.Parse()
 
-	startServer(*port, *pbsnodesCmd, *qstatCmd)
+	startServer(*port, *bjobsCmd, *bhostsCmd, *lsloadCmd)
 }
